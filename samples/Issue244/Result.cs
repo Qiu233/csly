@@ -7,6 +7,10 @@ namespace Issue244
         public int StartColumn { get; set; }
 
         public int EndColumn { get; set; }
+        
+        public int StartIndex { get; set; }
+        
+        public int EndIndex { get; set; }
 
         public int Column => EndColumn - StartColumn;
         

@@ -11,6 +11,10 @@ namespace Issue244
         [Operation("MINUS", Affix.InFix, Associativity.Left, 10)]
         public Result BinaryTermExpression(Result left, Token<SimpleExpressionToken> operation, Result right)
         {
+            // Get the length of the expression :
+            int length = right.EndIndex - left.StartIndex;
+            
+            
             Result result = null;
             switch (operation.TokenID)
             {
@@ -20,7 +24,9 @@ namespace Issue244
                     {
                         Value = left.Value + right.Value, 
                         StartColumn = left.StartColumn,
-                        EndColumn = right.EndColumn
+                        EndColumn = right.EndColumn,
+                        StartIndex = left.StartIndex,
+                        EndIndex = right.EndIndex
                     }
                     ;
                     break;
@@ -31,7 +37,9 @@ namespace Issue244
                     {
                         Value = left.Value - right.Value,
                         StartColumn = left.StartColumn,
-                        EndColumn = right.EndColumn
+                        EndColumn = right.EndColumn,
+                        StartIndex = left.StartIndex,
+                        EndIndex = right.EndIndex
                     };
                     break;
                 }
@@ -54,7 +62,9 @@ namespace Issue244
                     {
                         Value = left.Value * right.Value,
                         StartColumn = left.StartColumn,
-                        EndColumn = right.EndColumn
+                        EndColumn = right.EndColumn,
+                        StartIndex = left.StartIndex,
+                        EndIndex = right.EndIndex
                     };
                     break;
                 }
@@ -64,7 +74,9 @@ namespace Issue244
                     {
                         Value = left.Value / right.Value,
                         StartColumn = left.StartColumn,
-                        EndColumn = right.EndColumn
+                        EndColumn = right.EndColumn,
+                        StartIndex = left.StartIndex,
+                        EndIndex = right.EndIndex
                     };
                     break;
                 }
@@ -81,7 +93,9 @@ namespace Issue244
             {
                 Value = -value.Value, 
                 StartColumn = operation.Position.Column,
-                EndColumn = value.EndColumn
+                EndColumn = value.EndColumn,
+                StartIndex = operation.Position.Index,
+                EndIndex = value.EndIndex
             };
         }
 
@@ -102,7 +116,9 @@ namespace Issue244
             {
                 Value = value.DoubleValue,
                 StartColumn = value.Position.Column,
-                EndColumn = value.Position.Column + value.Value.Length
+                EndColumn = value.Position.Column + value.Value.Length,
+                StartIndex = value.Position.Index,
+                EndIndex = value.Position.Index + value.Value.Length
             };
         }
         
@@ -113,7 +129,9 @@ namespace Issue244
             {
                 Value = value.DoubleValue,
                 StartColumn = value.Position.Column,
-                EndColumn = value.Position.Column + value.Value.Length
+                EndColumn = value.Position.Column + value.Value.Length,
+                StartIndex = value.Position.Index,
+                EndIndex = value.Position.Index + value.Value.Length
             };
         }
 
@@ -124,7 +142,9 @@ namespace Issue244
             {
                 Value = value.Value,
                 StartColumn = lparen.Position.Column,
-                EndColumn = rparen.Position.Column + rparen.Value.Length
+                EndColumn = rparen.Position.Column + rparen.Value.Length,
+                StartIndex = rparen.Position.Index,
+                EndIndex = rparen.Position.Index + rparen.Value.Length,
             };
         }
     }
