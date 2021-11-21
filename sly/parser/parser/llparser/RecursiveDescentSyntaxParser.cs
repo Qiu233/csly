@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-//using System.Linq;
+using System.Linq;
 using sly.lexer;
 using sly.parser.generator;
 using sly.parser.syntax.grammar;
@@ -207,60 +207,65 @@ namespace sly.parser.llparser
                         count++;
                     }
                 }
-
-                if (count == 0)
-                {
-                    errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[0], I18n, nt.PossibleLeadingTokens.ToArray()));
-                }
-
-                SyntaxParseResult<IN> result = null;
+            }
 
 
-                if (rs.Count > 0)
-                {
-                    result = rs.Find(r => r.IsEnded && !r.IsError);
+            if (theResult != null)
+            {
+                return theResult;
+            }
 
-                    if (result == null)
-                    {
-                        var endingPositions = rs.Select(r => r.EndingPosition).ToList();
-                        var lastposition = endingPositions.Max();
-                        var furtherResults = rs.Where(r => r.EndingPosition == lastposition).ToList();
+            if (count == 0)
+            {
+                errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[0], I18n, nt.PossibleLeadingTokens.ToArray()));
+            }
 
-
-                        furtherResults.ForEach(r =>
-                        {
-                            if (r.Errors != null) errors.AddRange(r.Errors);
-                        });
-                        if (!errors.Any())
-                        {
-                            errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[lastposition], null));
-                        }
-                    }
-                }
+            SyntaxParseResult<IN> result = null;
+            if (rs.Count > 0)
+            {
+                result = rs.Find(r => r.IsEnded && !r.IsError);
 
                 if (result == null)
                 {
-                    result = new SyntaxParseResult<IN>();
-                    errors.Sort();
+                    var endingPositions = rs.Select(r => r.EndingPosition).ToList();
+                    var lastposition = endingPositions.Max();
+                    var furtherResults = rs.Where(r => r.EndingPosition == lastposition).ToList();
 
-                    if (errors.Count > 0)
-                    {
-                        var lastErrorPosition =
-                            errors.Select(e => e.UnexpectedToken.PositionInTokenFlow).ToList().Max();
-                        var lastErrors = errors.Where(e => e.UnexpectedToken.PositionInTokenFlow == lastErrorPosition)
-                            .ToList();
-                        result.Errors = lastErrors;
-                    }
-                    else
-                    {
-                        result.Errors = errors;
-                    }
 
-                    result.IsError = true;
+                    furtherResults.ForEach(r =>
+                    {
+                        if (r.Errors != null) errors.AddRange(r.Errors);
+                    });
+                    if (!errors.Any())
+                    {
+                        errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[lastposition], null));
+                    }
+                }
+            }
+
+            if (result == null)
+            {
+                result = new SyntaxParseResult<IN>();
+                errors.Sort();
+
+                if (errors.Count > 0)
+                {
+                    var lastErrorPosition =
+                        errors.Select(e => e.UnexpectedToken.PositionInTokenFlow).ToList().Max();
+                    var lastErrors = errors.Where(e => e.UnexpectedToken.PositionInTokenFlow == lastErrorPosition)
+                        .ToList();
+                    result.Errors = lastErrors;
+                }
+                else
+                {
+                    result.Errors = errors;
                 }
 
-                return result;
+                result.IsError = true;
             }
+
+            return result;
+        }
 
 
         public virtual SyntaxParseResult<IN> Parse(IList<Token<IN>> tokens, Rule<IN> rule, int position,
