@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
+//using System.Linq;
 using sly.lexer;
 using sly.parser.generator;
 using sly.parser.syntax.grammar;
@@ -9,7 +9,8 @@ namespace sly.parser.llparser
 {
     public class RecursiveDescentSyntaxParser<IN, OUT> : ISyntaxParser<IN, OUT> where IN : struct
     {
-        public RecursiveDescentSyntaxParser(ParserConfiguration<IN, OUT> configuration, string startingNonTerminal, string i18n)
+        public RecursiveDescentSyntaxParser(ParserConfiguration<IN, OUT> configuration, string startingNonTerminal,
+            string i18n)
         {
             I18n = i18n;
             Configuration = configuration;
@@ -20,7 +21,7 @@ namespace sly.parser.llparser
 
         public ParserConfiguration<IN, OUT> Configuration { get; set; }
         public string StartingNonTerminal { get; set; }
-        
+
         public string I18n { get; set; }
 
         public ParserConfiguration<IN, OUT> ComputeSubRules(ParserConfiguration<IN, OUT> configuration)
@@ -82,7 +83,7 @@ namespace sly.parser.llparser
         public NonTerminal<IN> CreateSubRule(GroupClause<IN> group)
         {
             var subRuleNonTerminalName = "GROUP-" + group.Clauses.Select(c => c.ToString())
-                                             .Aggregate((c1, c2) => $"{c1.ToString()}-{c2.ToString()}");
+                .Aggregate((c1, c2) => $"{c1.ToString()}-{c2.ToString()}");
             var nonTerminal = new NonTerminal<IN>(subRuleNonTerminalName);
             var subRule = new Rule<IN>();
             subRule.Clauses = group.Clauses;
@@ -135,7 +136,7 @@ namespace sly.parser.llparser
                         rule.PossibleLeadingTokens.Add(term.ExpectedToken);
                         rule.PossibleLeadingTokens = rule.PossibleLeadingTokens.Distinct().ToList();
                     }
-                    else if (first  is NonTerminalClause<IN> nonterm)
+                    else if (first is NonTerminalClause<IN> nonterm)
                     {
                         InitStartingTokensForNonTerminal(nonTerminals, nonterm.NonTerminalName);
                         if (nonTerminals.ContainsKey(nonterm.NonTerminalName))
@@ -150,7 +151,7 @@ namespace sly.parser.llparser
                     }
                     else
                     {
-                        InitStartingTokensForRuleExtensions(first,rule,nonTerminals);
+                        InitStartingTokensForRuleExtensions(first, rule, nonTerminals);
                     }
                 }
             }
@@ -172,68 +173,94 @@ namespace sly.parser.llparser
             var errors = new List<UnexpectedTokenSyntaxError<IN>>();
             var nt = NonTerminals[start];
 
-            var rules = nt.Rules.Where(r => !tokens[0].IsEOS && r.PossibleLeadingTokens.Contains(tokens[0].TokenID)).ToList();
+            var rules = nt.Rules.Where(r => !tokens[0].IsEOS && r.PossibleLeadingTokens.Contains(tokens[0].TokenID))
+                .ToList();
 
             if (!rules.Any())
             {
-                errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[0], I18n,nt.PossibleLeadingTokens.ToArray()));
+                errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[0], I18n, nt.PossibleLeadingTokens.ToArray()));
             }
-            
+
             var rs = new List<SyntaxParseResult<IN>>();
-            foreach (var rule in rules)
+            SyntaxParseResult<IN> theResult = null;
+            int count = 0;
+            foreach (var rule in nt.Rules)
             {
-                var r = Parse(tokens, rule, 0, start);
-                rs.Add(r);
-            }
+                if (!tokens[0].IsEOS && rule.PossibleLeadingTokens.Contains(tokens[0].TokenID))
+                {
+                    var r = Parse(tokens, rule, 0, start);
+                    if (r.IsEnded && !r.IsError)
+                    {
+                        if (theResult == null)
+                        {
+                            theResult = r;
+                        }
+                        else
+                        {
+                            if (r.EndingPosition > theResult.EndingPosition)
+                            {
+                                theResult = r;
+                            }
+                        }
 
-            SyntaxParseResult<IN> result = null;
+                        rs.Add(r);
+                        count++;
+                    }
+                }
+
+                if (count == 0)
+                {
+                    errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[0], I18n, nt.PossibleLeadingTokens.ToArray()));
+                }
+
+                SyntaxParseResult<IN> result = null;
 
 
-            if (rs.Count > 0)
-            {
-                result = rs.Find(r => r.IsEnded && !r.IsError);
+                if (rs.Count > 0)
+                {
+                    result = rs.Find(r => r.IsEnded && !r.IsError);
+
+                    if (result == null)
+                    {
+                        var endingPositions = rs.Select(r => r.EndingPosition).ToList();
+                        var lastposition = endingPositions.Max();
+                        var furtherResults = rs.Where(r => r.EndingPosition == lastposition).ToList();
+
+
+                        furtherResults.ForEach(r =>
+                        {
+                            if (r.Errors != null) errors.AddRange(r.Errors);
+                        });
+                        if (!errors.Any())
+                        {
+                            errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[lastposition], null));
+                        }
+                    }
+                }
 
                 if (result == null)
                 {
-                    var endingPositions = rs.Select(r => r.EndingPosition).ToList();
-                    var lastposition = endingPositions.Max();
-                    var furtherResults = rs.Where(r => r.EndingPosition == lastposition).ToList();
+                    result = new SyntaxParseResult<IN>();
+                    errors.Sort();
 
-                    
-                    
-                    furtherResults.ForEach(r =>
+                    if (errors.Count > 0)
                     {
-                        if (r.Errors != null) errors.AddRange(r.Errors);
-                    });
-                    if (!errors.Any())
-                    {
-                        errors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[lastposition], null));
+                        var lastErrorPosition =
+                            errors.Select(e => e.UnexpectedToken.PositionInTokenFlow).ToList().Max();
+                        var lastErrors = errors.Where(e => e.UnexpectedToken.PositionInTokenFlow == lastErrorPosition)
+                            .ToList();
+                        result.Errors = lastErrors;
                     }
+                    else
+                    {
+                        result.Errors = errors;
+                    }
+
+                    result.IsError = true;
                 }
+
+                return result;
             }
-
-            if (result == null)
-            {
-                result = new SyntaxParseResult<IN>();
-                errors.Sort();
-
-                if (errors.Count > 0)
-                {
-                    var lastErrorPosition = errors.Select(e => e.UnexpectedToken.PositionInTokenFlow).ToList().Max();
-                    var lastErrors = errors.Where(e => e.UnexpectedToken.PositionInTokenFlow == lastErrorPosition)
-                        .ToList();
-                    result.Errors = lastErrors;
-                }
-                else
-                {
-                    result.Errors = errors;
-                }
-
-                result.IsError = true;
-            }
-
-            return result;
-        }
 
 
         public virtual SyntaxParseResult<IN> Parse(IList<Token<IN>> tokens, Rule<IN> rule, int position,
@@ -260,8 +287,8 @@ namespace sly.parser.llparser
                             else
                             {
                                 var tok = tokens[currentPosition];
-                                errors.Add(new UnexpectedTokenSyntaxError<IN>(tok,I18n,
-                                    ((TerminalClause<IN>) clause).ExpectedToken));
+                                errors.Add(new UnexpectedTokenSyntaxError<IN>(tok, I18n,
+                                    ((TerminalClause<IN>)clause).ExpectedToken));
                             }
 
                             isError = isError || termRes.IsError;
@@ -299,7 +326,7 @@ namespace sly.parser.llparser
                 if (rule.IsSubRule)
                     node = new GroupSyntaxNode<IN>(nonTerminalName, children);
                 else
-                    node = new SyntaxNode<IN>( nonTerminalName, children);
+                    node = new SyntaxNode<IN>(nonTerminalName, children);
                 node = ManageExpressionRules(rule, node);
                 if (node.IsByPassNode) // inutile de créer un niveau supplémentaire
                     result.Root = children[0];
@@ -307,7 +334,6 @@ namespace sly.parser.llparser
                 result.IsEnded = result.EndingPosition >= tokens.Count - 1
                                  || result.EndingPosition == tokens.Count - 2 &&
                                  tokens[tokens.Count - 1].IsEOS;
-                
             }
 
 
@@ -363,7 +389,7 @@ namespace sly.parser.llparser
             result.EndingPosition = !result.IsError ? position + 1 : position;
             var token = tokens[position];
             token.Discarded = terminal.Discarded;
-            result.Root = new SyntaxLeaf<IN>(token,terminal.Discarded);
+            result.Root = new SyntaxLeaf<IN>(token, terminal.Discarded);
             result.HasByPassNodes = false;
             return result;
         }
@@ -378,15 +404,17 @@ namespace sly.parser.llparser
 
             var i = 0;
             var rules = nt.Rules
-                .Where(r => startPosition < tokens.Count && !tokens[startPosition].IsEOS && r.PossibleLeadingTokens.Contains(tokens[startPosition].TokenID) || r.MayBeEmpty)
+                .Where(r => startPosition < tokens.Count && !tokens[startPosition].IsEOS &&
+                    r.PossibleLeadingTokens.Contains(tokens[startPosition].TokenID) || r.MayBeEmpty)
                 .ToList();
 
-            if (rules.Count == 0 )
+            if (rules.Count == 0)
             {
                 var allAcceptableTokens = new List<IN>();
                 nt.Rules.ForEach(r =>
                 {
-                    if (r != null && r.PossibleLeadingTokens != null) allAcceptableTokens.AddRange(r.PossibleLeadingTokens);
+                    if (r != null && r.PossibleLeadingTokens != null)
+                        allAcceptableTokens.AddRange(r.PossibleLeadingTokens);
                 });
                 allAcceptableTokens = allAcceptableTokens.Distinct().ToList();
                 return NoMatchingRuleError(tokens, currentPosition, allAcceptableTokens);
@@ -409,7 +437,7 @@ namespace sly.parser.llparser
                     //innerRuleErrors.Clear();
                     innerRuleErrors.AddRange(innerRuleRes.Errors);
                 }
-               
+
                 innerRuleErrors.AddRange(innerRuleRes.Errors);
                 i++;
             }
@@ -443,7 +471,7 @@ namespace sly.parser.llparser
             result.IsError = max.IsError;
             result.IsEnded = max.IsEnded;
             result.HasByPassNodes = max.HasByPassNodes;
-            
+
             if (rulesResults.Any())
             {
                 var terr = rulesResults.SelectMany(x => x.Errors).ToList();
@@ -451,22 +479,23 @@ namespace sly.parser.llparser
                 var expecting = unexpected.SelectMany(x => x.ExpectedTokens).ToList();
                 result.AddExpectings(expecting);
             }
-            
+
             return result;
         }
 
-        private SyntaxParseResult<IN> NoMatchingRuleError(IList<Token<IN>> tokens, int currentPosition, List<IN> allAcceptableTokens)
+        private SyntaxParseResult<IN> NoMatchingRuleError(IList<Token<IN>> tokens, int currentPosition,
+            List<IN> allAcceptableTokens)
         {
             var noRuleErrors = new List<UnexpectedTokenSyntaxError<IN>>();
 
             if (currentPosition < tokens.Count)
             {
-                noRuleErrors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[currentPosition],I18n,
+                noRuleErrors.Add(new UnexpectedTokenSyntaxError<IN>(tokens[currentPosition], I18n,
                     allAcceptableTokens.ToArray<IN>()));
             }
             else
             {
-                noRuleErrors.Add(new UnexpectedTokenSyntaxError<IN>(new Token<IN>() {IsEOS = true},I18n,
+                noRuleErrors.Add(new UnexpectedTokenSyntaxError<IN>(new Token<IN>() { IsEOS = true }, I18n,
                     allAcceptableTokens.ToArray<IN>()));
             }
 
